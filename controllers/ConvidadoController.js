@@ -94,10 +94,51 @@ const validarSenha = async (req, res) => {
   }
 };
 
-// Buscar todos os convidados
+// Buscar convidados com suporte a busca geral e filtros por campos
+// Query params aceitos:
+// - q: string de busca (aplica em nome, parentesco, senha)
+// - campos: lista separada por vírgula para limitar a busca (ex: nome,parentesco,senha,status)
+// - status: 'true' | 'false' para filtrar presença
 const listarConvidados = async (req, res) => {
   try {
-    const convidados = await Convidado.find();
+    const { q, campos, status } = req.query;
+
+    const filtro = {};
+
+    // Filtro por status (boolean)
+    if (typeof status === 'string' && (status === 'true' || status === 'false')) {
+      filtro.status = status === 'true';
+    }
+
+    // Busca textual nos campos
+    if (typeof q === 'string' && q.trim().length > 0) {
+      const valor = q.trim();
+      const camposLista = typeof campos === 'string' && campos.trim().length > 0
+        ? campos.split(',').map(c => c.trim()).filter(Boolean)
+        : ['nome', 'parentesco', 'senha'];
+
+      const regex = new RegExp(valor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+      const orArray = [];
+      if (camposLista.includes('nome')) orArray.push({ nome: { $regex: regex } });
+      if (camposLista.includes('parentesco')) orArray.push({ parentesco: { $regex: regex } });
+      if (camposLista.includes('senha')) orArray.push({ senha: { $regex: regex } });
+      if (camposLista.includes('status')) {
+        // Permitir que "q" também filtre status por palavras como presente/aguardando/true/false
+        const qLower = valor.toLowerCase();
+        if (['true', 'presente', '1'].includes(qLower)) {
+          orArray.push({ status: true });
+        } else if (['false', 'aguardando', '0', 'ausente'].includes(qLower)) {
+          orArray.push({ status: false });
+        }
+      }
+
+      if (orArray.length > 0) {
+        filtro.$or = orArray;
+      }
+    }
+
+    const convidados = await Convidado.find(filtro);
     res.json(convidados);
   } catch (error) {
     res.status(500).json({ erro: error.message });

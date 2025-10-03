@@ -3,8 +3,21 @@ const cors = require("cors");
 require("dotenv").config();
 const app = express();
 
+const allowlist = [
+  process.env.FRONTEND_URL || 'http://localhost:3001',
+  'http://localhost:3000',
+  'http://localhost:3001'
+];
+
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  origin: function (origin, callback) {
+    // Permite chamadas server-to-server (sem origin) e as origens da allowlist
+    if (!origin || allowlist.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
